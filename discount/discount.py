@@ -8,10 +8,10 @@ import pandas as pd
 from dotenv import load_dotenv
 
 # ── BASE DIR ──
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.extend([
-    str(BASE_DIR.parents[1] / "iop" / "python"),
-    str(BASE_DIR.parents[1] / "sdk" / "python")
+    str(BASE_DIR / "iop" / "python"),
+    str(BASE_DIR / "sdk" / "python")
 ])
 
 import iop
@@ -25,11 +25,11 @@ try:
 except ImportError:
     IN_JUPYTER = False
 
+output = widgets.Output()
+
 # ── ENV LOAD ──
-ENV_PATH = BASE_DIR.parents[1] / ".env"
-ORDER_ENV_PATH = BASE_DIR / ".env"
+ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
-load_dotenv(ORDER_ENV_PATH)
 
 url = os.getenv("DARAZ_BASE_URL", "https://api.daraz.com.bd/rest")
 appkey = os.getenv("DARAZ_APP_KEY")
@@ -117,11 +117,13 @@ def save_access_token_to_env(token, env_path=ENV_PATH):
     print(f"✅ Access token saved to {env_path}")
 
 
-def save_dates_to_env(start_date, end_date, env_path=ORDER_ENV_PATH):
+def save_dates_to_env(start_date, end_date, env_path=ENV_PATH):
     """
     Overwrites ORDER_START_DATE and ORDER_END_DATE
     while preserving file formatting and blank lines.
     """
+
+    # global output
 
     if not os.path.exists(env_path):
         return
@@ -146,7 +148,11 @@ def save_dates_to_env(start_date, end_date, env_path=ORDER_ENV_PATH):
     with open(env_path, "w") as f:
         f.writelines(new_lines)
 
-    print(f"✅ Saved next date range: {start_date} → {end_date}")
+    # Step 1: show running message
+    # output.clear_output(wait=True)
+    with output:
+        print("➡ Date range advanced by 7 days.")
+    # print(f"✅ Saved next date range: {start_date} → {end_date}")
 
 
 # ── TOKEN CHECK ──
@@ -206,6 +212,7 @@ def get_access_token(callback=None):
 
 # ── SHOW DATE WIDGET ──
 def show_date_widget_and_run():
+    # global output
 
     current_start = os.getenv("ORDER_START_DATE", "2021-01-01")
     current_end = os.getenv("ORDER_END_DATE", datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -225,22 +232,21 @@ def show_date_widget_and_run():
         button_style="primary"
     )
 
-    output = widgets.Output()
     container = widgets.VBox([start_picker, end_picker, run_button, output])
     display(container)
 
     def on_run(b):
-
+        # global output
         start_date = start_picker.value.strftime("%Y-%m-%d")
         end_date = end_picker.value.strftime("%Y-%m-%d")
 
-        # Step 1: show running message
-        output.clear_output(wait=True)
-        with output:
-            print("⏳ Running fetch for:", start_date, "→", end_date)
-
         # Step 2: run fetch
-        fetch_and_process_data(access_token, start_date, end_date)
+        # display_df(
+        save_csv(
+            access_token, start_date, end_date,
+            # output
+        )
+        # fetch_and_process_data(access_token, start_date, end_date)
 
         # Step 3: advance dates
         next_start = start_picker.value + datetime.timedelta(days=7)
@@ -248,18 +254,13 @@ def show_date_widget_and_run():
 
         save_dates_to_env(
             next_start.strftime("%Y-%m-%d"),
-            next_end.strftime("%Y-%m-%d")
+            next_end.strftime("%Y-%m-%d"),
+            # output
         )
 
         start_picker.value = next_start
         end_picker.value = next_end
 
-        # Step 4: replace running message with success
-        output.clear_output(wait=True)
-        with output:
-            print("✅ Fetch successful.")
-            print("📁 CSV saved for:", start_date, "→", end_date)
-            print("➡ Date range advanced by 7 days.")
 
     run_button.on_click(on_run)
 
@@ -292,6 +293,13 @@ def get_trans(access_token,start_date, end_date, order_id=None, line_id=None):
 # ── FETCH AND PROCESS DATA ──
 def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
     global client
+    global output
+
+    # Step 1: show running message
+    output.clear_output(wait=True)
+    with output:
+        print("⏳ Running fetch for:", start_date, "→", end_date)
+
     if not access_token:
         print("No access token available!")
         return
@@ -384,11 +392,39 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
         by=['Date'], ascending=False
     ).reset_index(drop=True)
 
-    new_df.to_csv(f"./{start_date}_{end_date}.csv", index=False)
-
-    print("CSV saved successfully.")
+    # Step 4: replace running message with success
+    output.clear_output(wait=True)
+    with output:
+        print("✅ Fetch successful.")
 
     return new_df
+
+
+def display_df(token, start_date, end_date):
+    global access_token
+    global output
+    access_token = token
+    new_df = fetch_and_process_data(access_token, start_date, end_date)
+
+    # Step 4: replace running message with success
+    output.clear_output(wait=True)
+    with output:
+        print("for:", start_date, "→", end_date)
+        display(new_df)
+        # return new_df
+
+def save_csv(token, start_date, end_date):
+    global access_token
+    global output
+    access_token = token
+    new_df = fetch_and_process_data(access_token, start_date, end_date)
+
+    new_df.to_csv(f"./{start_date}_{end_date}.csv", index=False)
+
+    # Step 4: replace running message with success
+    output.clear_output(wait=True)
+    with output:
+        print("📁 CSV saved for:", start_date, "→", end_date)
 
 
 # ── CALLBACK AFTER TOKEN ──

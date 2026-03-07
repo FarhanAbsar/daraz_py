@@ -1,2 +1,6 @@
 .env
-dev.ipynb
+*.env
+__pycache__
+*__pycache__
+*.log.*
+# *dev.ipynb

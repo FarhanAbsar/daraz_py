@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', None)
+pd.set_option('display.expand_frame_repr', False)
+
 # ── BASE DIR ──
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.extend([
@@ -26,6 +32,7 @@ except ImportError:
     IN_JUPYTER = False
 
 output = widgets.Output()
+container_widget = None
 
 # ── ENV LOAD ──
 ENV_PATH = BASE_DIR / ".env"
@@ -213,6 +220,7 @@ def get_access_token(callback=None):
 # ── SHOW DATE WIDGET ──
 def show_date_widget_and_run():
     # global output
+    global container_widget
 
     current_start = os.getenv("ORDER_START_DATE", "2021-01-01")
     current_end = os.getenv("ORDER_END_DATE", datetime.datetime.now().strftime("%Y-%m-%d"))
@@ -232,17 +240,22 @@ def show_date_widget_and_run():
         button_style="primary"
     )
 
-    container = widgets.VBox([start_picker, end_picker, run_button, output])
-    display(container)
+    container = widgets.VBox([start_picker, end_picker, run_button])
+    display(container, output)
+
+    container_widget = container
 
     def on_run(b):
         # global output
+        global container_widget
+        container_widget.close()
+
         start_date = start_picker.value.strftime("%Y-%m-%d")
         end_date = end_picker.value.strftime("%Y-%m-%d")
 
         # Step 2: run fetch
-        # display_df(
-        save_csv(
+        display_df(
+        # save_csv(
             access_token, start_date, end_date,
             # output
         )

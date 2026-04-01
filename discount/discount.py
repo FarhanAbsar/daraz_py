@@ -31,8 +31,24 @@ try:
 except ImportError:
     IN_JUPYTER = False
 
-output = widgets.Output()
+# output = widgets.Output()
+output = None
 container_widget = None
+
+_output_displayed = False
+
+def _get_output():
+    global output
+    if output is None:
+        output = widgets.Output()
+    global _output_displayed
+    if not _output_displayed:
+        try:
+            display(output)
+        except Exception:
+            pass
+        _output_displayed = True
+    return output
 
 # ── ENV LOAD ──
 ENV_PATH = BASE_DIR / ".env"
@@ -130,7 +146,7 @@ def save_dates_to_env(start_date, end_date, env_path=ENV_PATH):
     while preserving file formatting and blank lines.
     """
 
-    # global output
+    global output
 
     if not os.path.exists(env_path):
         return
@@ -156,7 +172,7 @@ def save_dates_to_env(start_date, end_date, env_path=ENV_PATH):
         f.writelines(new_lines)
 
     # Step 1: show running message
-    # output.clear_output(wait=True)
+    output = _get_output()
     with output:
         print("➡ Date range advanced by 7 days.")
     # print(f"✅ Saved next date range: {start_date} → {end_date}")
@@ -219,7 +235,8 @@ def get_access_token(callback=None):
 
 # ── SHOW DATE WIDGET ──
 def show_date_widget_and_run():
-    # global output
+    global output
+    output = _get_output()
     global container_widget
 
     current_start = os.getenv("ORDER_START_DATE", "2021-01-01")
@@ -241,7 +258,7 @@ def show_date_widget_and_run():
     )
 
     container = widgets.VBox([start_picker, end_picker, run_button])
-    display(container, output)
+    display(container)
 
     container_widget = container
 
@@ -277,9 +294,12 @@ def show_date_widget_and_run():
 
     run_button.on_click(on_run)
 
-def get_order_items(order_id):
-    request = iop.IopRequest('/order/items/get', 'GET')
-    request.add_api_param('order_id', order_id)
+# def get_order_items(order_id):
+#     request = iop.IopRequest('/order/items/get', 'GET')
+#     request.add_api_param('order_id', order_id)
+def get_order_items(order_ids):
+    request = iop.IopRequest('/orders/items/get', 'GET')
+    request.add_api_param('order_ids', order_ids)
     response = client.execute(request, access_token)
     return json.loads(response.body)["data"]
 
@@ -307,6 +327,7 @@ def get_trans(access_token,start_date, end_date, order_id=None, line_id=None):
 def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
     global client
     global output
+    output = _get_output()
 
     # Step 1: show running message
     output.clear_output(wait=True)
@@ -329,14 +350,45 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
 
     print("Fetching data from", start_date, "to", end_date)
 
-    data = get_trans(access_token, start_date, end_date)
+    data = []
+    start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+    current = start
+
+    while current <= end:
+        next_day = current + datetime.timedelta(days=1)
+
+        data.extend(
+            get_trans(
+                access_token,
+                current.strftime("%Y-%m-%d"),
+                current.strftime("%Y-%m-%d")
+            )
+        )
+
+        current = next_day
     df = pd.DataFrame(data)
 
     ordNos = df['order_no'].unique()
     # Fetch order info
     order_item_info = {}
-    for order_id in ordNos:
-        order_items = get_order_items(order_id)
+    # for order_id in ordNos:
+    #     order_items = get_order_items(order_id)
+    orders_items = []
+    for j in range(0, len(ordNos), 10):
+        orders_items += get_order_items(ordNos[j:j+10])
+
+    with output:
+        print("Fetched", len(orders_items), "orders")  
+    order_items = [
+        item 
+        for ordr in orders_items 
+        for item in ordr["order_items"]
+    ]
+    # with output:
+    #     print("Fetched", len(order_items), "order items")  
+        # print("first order item: ", order_items[0])
+    if True:
         for itemDoc in order_items:
             order_item = str(itemDoc.get("order_item_id", None))
             if order_item:
@@ -345,6 +397,12 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
                     "retail_price": itemDoc.get("item_price", 0.00),
                     "voucher": itemDoc.get("voucher_seller", 0.00),
                 }
+            # with output:
+            #     print("order item:", order_item, order_item_info[order_item])
+
+    with output:
+        print(len(order_item_info), "order item info")
+        print("first order item info: ", list(order_item_info.keys())[0], list(order_item_info.values())[0] )
 
     # Clean amounts
     df['amount'] = pd.to_numeric(
@@ -406,7 +464,7 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
     ).reset_index(drop=True)
 
     # Step 4: replace running message with success
-    output.clear_output(wait=True)
+    # output.clear_output(wait=True)
     with output:
         print("✅ Fetch successful.")
 
@@ -416,11 +474,13 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
 def display_df(token, start_date, end_date):
     global access_token
     global output
+    output = _get_output()
+
     access_token = token
     new_df = fetch_and_process_data(access_token, start_date, end_date)
 
     # Step 4: replace running message with success
-    output.clear_output(wait=True)
+    # output.clear_output(wait=True)
     with output:
         print("for:", start_date, "→", end_date)
         display(new_df)
@@ -429,13 +489,15 @@ def display_df(token, start_date, end_date):
 def save_csv(token, start_date, end_date):
     global access_token
     global output
+    out = _get_output()
+
     access_token = token
     new_df = fetch_and_process_data(access_token, start_date, end_date)
 
     new_df.to_csv(f"./{start_date}_{end_date}.csv", index=False)
 
     # Step 4: replace running message with success
-    output.clear_output(wait=True)
+    # output.clear_output(wait=True)
     with output:
         print("📁 CSV saved for:", start_date, "→", end_date)
 

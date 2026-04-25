@@ -297,11 +297,18 @@ def show_date_widget_and_run():
 # def get_order_items(order_id):
 #     request = iop.IopRequest('/order/items/get', 'GET')
 #     request.add_api_param('order_id', order_id)
-def get_order_items(order_ids):
+def get_order_items(
+    order_ids, 
+    # output=null
+):
     request = iop.IopRequest('/orders/items/get', 'GET')
     request.add_api_param('order_ids', order_ids)
     response = client.execute(request, access_token)
-    return json.loads(response.body)["data"]
+    dicty = json.loads(response.body)
+    # if output:
+    #     with output:
+    #         print(order_ids, dicty)
+    return dicty["data"]
 
 def get_order(order_id):
     request = iop.IopRequest('/order/get', 'GET')
@@ -370,13 +377,21 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
     df = pd.DataFrame(data)
 
     ordNos = df['order_no'].unique()
+    # bad api change , previously it was string and it was better
+    ordNos = [int(ordNo) for ordNo in ordNos]
     # Fetch order info
     order_item_info = {}
     # for order_id in ordNos:
     #     order_items = get_order_items(order_id)
     orders_items = []
-    for j in range(0, len(ordNos), 10):
-        orders_items += get_order_items(ordNos[j:j+10])
+    with output:
+        for j in range(0, len(ordNos), 10):
+            batch = ordNos[j:j+10]
+            # print(batch)
+            orders_items += get_order_items(
+                batch, 
+                # output
+            )
 
     with output:
         print("Fetched", len(orders_items), "orders")  
@@ -402,7 +417,7 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
 
     with output:
         print(len(order_item_info), "order item info")
-        print("first order item info: ", list(order_item_info.keys())[0], list(order_item_info.values())[0] )
+        # print("first order item info: ", list(order_item_info.keys())[0], list(order_item_info.values())[0] )
 
     # Clean amounts
     df['amount'] = pd.to_numeric(

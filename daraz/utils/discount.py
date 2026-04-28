@@ -5,23 +5,17 @@ from pathlib import Path
 import datetime
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
+from .get_env import ENV_PATH
+from .get_access_token import access_token
+from .get_client import client
+from .get_trans import get_trans
+from .get_order_items import get_order_items
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', None)
 pd.set_option('display.expand_frame_repr', False)
-
-# ── BASE DIR ──
-BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.extend([
-    str(BASE_DIR / "iop" / "python"),
-    str(BASE_DIR / "sdk" / "python")
-])
-
-import iop
-from lazop import LazopClient, LazopRequest
 
 # ── JUPYTER WIDGETS ──
 try:
@@ -49,96 +43,6 @@ def _get_output():
             pass
         _output_displayed = True
     return output
-
-# ── ENV LOAD ──
-ENV_PATH = BASE_DIR / ".env"
-load_dotenv(ENV_PATH)
-
-url = os.getenv("DARAZ_BASE_URL", "https://api.daraz.com.bd/rest")
-appkey = os.getenv("DARAZ_APP_KEY")
-appSecret = os.getenv("DARAZ_APP_SECRET")
-authUrl = os.getenv("DARAZ_AUTH_URL")
-
-client = iop.IopClient(url, appkey, appSecret)
-access_token = os.getenv("DARAZ_ACCESS_TOKEN")
-
-# ── PROMPT FOR AUTH CODE ──
-def prompt_for_auth_code(callback=None):
-    """
-    Shows instructions + widget in Jupyter or input() in script.
-    Calls callback(code) when code entered.
-    """
-
-    html_instructions = f"""
-    <div style="font-size:14px">
-        1️⃣ Click this link and open in your browser:<br>
-        <a href="{authUrl}" target="_blank">{authUrl}</a><br><br>
-        2️⃣ Login if required and click 'Authorize'<br>
-        3️⃣ Copy the value after 'code=' in the redirect URL and paste below.
-    </div>
-    """
-
-    if IN_JUPYTER:
-        display(HTML(html_instructions))
-
-        text = widgets.Text(
-            description="Auth code:",
-            layout=widgets.Layout(width="65%"),
-            placeholder="paste the code from redirect URL",
-        )
-        button = widgets.Button(description="Submit", button_style="success")
-        output = widgets.Output()
-
-        display(text, button, output)
-
-        def on_submit(b):
-            code = text.value.strip()
-            text.disabled = True
-            button.disabled = True
-
-            with output:
-                print("✅ Auth code captured:", code)
-
-            if callback:
-                callback(code)
-
-        button.on_click(on_submit)
-
-    else:
-        print(html_instructions)
-        code = input("Paste the code here: ").strip()
-        if callback:
-            return callback(code)
-        return code
-
-
-# ── SAVE ACCESS TOKEN ──
-def save_access_token_to_env(token, env_path=ENV_PATH):
-    """
-    Writes DARAZ_ACCESS_TOKEN=<token> to the .env file.
-    Overwrites existing DARAZ_ACCESS_TOKEN if present.
-    """
-
-    lines = []
-
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            lines = f.readlines()
-
-    # Remove old token line
-    lines = [line for line in lines if not line.startswith("DARAZ_ACCESS_TOKEN=")]
-
-    # Ensure newline before appending
-    if lines and not lines[-1].endswith("\n"):
-        lines[-1] += "\n"
-
-    lines.append(f"DARAZ_ACCESS_TOKEN={token}\n")
-
-    with open(env_path, "w") as f:
-        f.writelines(lines)
-
-    print(f"✅ Access token saved to {env_path}")
-
 
 def save_dates_to_env(start_date, end_date, env_path=ENV_PATH):
     """
@@ -176,62 +80,6 @@ def save_dates_to_env(start_date, end_date, env_path=ENV_PATH):
     with output:
         print("➡ Date range advanced by 7 days.")
     # print(f"✅ Saved next date range: {start_date} → {end_date}")
-
-
-# ── TOKEN CHECK ──
-def token_works():
-    global client
-    global access_token
-    request = iop.IopRequest('/seller/get', 'GET')
-    response = client.execute(request, access_token)
-    return "data" in response.body
-
-
-# ── GET ACCESS TOKEN ──
-def get_access_token(callback=None):
-    """
-    Get Daraz access token.
-    In Jupyter, uses widget callback.
-    In script, returns token directly.
-    """
-
-    global access_token
-
-    if access_token and token_works():
-        # print("✅ Access token retrieved:", access_token)
-        if callback:
-            callback(access_token)
-        return access_token  # Important: stop here
-
-    print("❌ Invalid or missing access token")
-
-    def process_auth_code(auth_code):
-        global access_token
-
-        print("auth_code in process_auth_code:", auth_code)
-
-        client_obj = LazopClient(url, appkey, appSecret)
-        request = LazopRequest("/auth/token/create")
-        request.add_api_param("code", auth_code)
-
-        response = client_obj.execute(request)
-        access_token = response.body["access_token"]
-
-        # print("✅ Access token retrieved:", access_token)
-
-        save_access_token_to_env(access_token)
-
-        if callback:
-            callback(access_token)
-
-        return access_token
-
-    if IN_JUPYTER:
-        prompt_for_auth_code(callback=process_auth_code)
-    else:
-        code = prompt_for_auth_code()
-        return process_auth_code(code)
-
 
 # ── SHOW DATE WIDGET ──
 def show_date_widget_and_run():
@@ -294,41 +142,6 @@ def show_date_widget_and_run():
 
     run_button.on_click(on_run)
 
-# def get_order_items(order_id):
-#     request = iop.IopRequest('/order/items/get', 'GET')
-#     request.add_api_param('order_id', order_id)
-def get_order_items(
-    order_ids, 
-    # output=null
-):
-    request = iop.IopRequest('/orders/items/get', 'GET')
-    request.add_api_param('order_ids', order_ids)
-    response = client.execute(request, access_token)
-    dicty = json.loads(response.body)
-    # if output:
-    #     with output:
-    #         print(order_ids, dicty)
-    return dicty["data"]
-
-def get_order(order_id):
-    request = iop.IopRequest('/order/get', 'GET')
-    request.add_api_param('order_id', order_id)
-    response = client.execute(request, access_token)
-    return json.loads(response.body)["data"]
-
-def get_trans(access_token,start_date, end_date, order_id=None, line_id=None):
-    global client
-    # global access_token
-    request = iop.IopRequest('/finance/transaction/details/get', 'GET')
-    request.add_api_param('start_time', start_date)
-    request.add_api_param('end_time', end_date)
-    if order_id:
-        request.add_api_param('trade_order_id', order_id)
-    if line_id:
-        request.add_api_param('trade_order_line_id', line_id)
-    response = client.execute(request, access_token)
-    print(response.body)
-    return json.loads(response.body)["data"]
 
 # ── FETCH AND PROCESS DATA ──
 def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
@@ -390,6 +203,7 @@ def fetch_and_process_data(access_token=None, start_date=None, end_date=None):
             # print(batch)
             orders_items += get_order_items(
                 batch, 
+                access_token,
                 # output
             )
 
@@ -517,6 +331,7 @@ def save_csv(token, start_date, end_date):
         print("📁 CSV saved for:", start_date, "→", end_date)
 
 
+
 # ── CALLBACK AFTER TOKEN ──
 def after_token(token):
     global access_token
@@ -527,11 +342,11 @@ def after_token(token):
     else:
         fetch_and_process_data(access_token)
 
-
 # ── MAIN ──
 def main():
     if IN_JUPYTER:
-        get_access_token(callback=after_token)
+        # get_access_token(callback=after_token)
+        after_token(access_token)
     else:
         fetch_and_process_data(access_token)
 

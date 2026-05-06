@@ -8,7 +8,7 @@ import json
 def get_order_items(
     order_ids, 
     access_token,
-    # output=null
+    # output=None
 ):
     request = IopRequest('/orders/items/get', 'GET')
     request.add_api_param('order_ids', order_ids)

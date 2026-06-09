@@ -96,6 +96,7 @@ def token_works(access_token=os.getenv("DARAZ_ACCESS_TOKEN")):
     # global access_token
     request = IopRequest('/seller/get', 'GET')
     response = client.execute(request, access_token)
+    # print("response in token_works:", response.body)
     return "data" in response.body
 
 
@@ -130,6 +131,7 @@ def get_access_token(callback=None):
         request.add_api_param("code", auth_code)
 
         response = client_obj.execute(request)
+        # print("response in process_auth_code:", response.body)
         access_token = response.body["access_token"]
 
         # print("✅ Access token retrieved:", access_token)
@@ -140,9 +142,12 @@ def get_access_token(callback=None):
             callback(access_token)
 
         return access_token
-
-    code = prompt_for_auth_code()
-    return process_auth_code(code)
+    if IN_JUPYTER:
+        prompt_for_auth_code(process_auth_code)
+    else:
+        code = prompt_for_auth_code()
+        print("code after prompt_for_auth_code:", code)
+        return process_auth_code(code)
 
 
 access_token = get_access_token()

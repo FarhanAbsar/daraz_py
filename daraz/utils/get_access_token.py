@@ -7,6 +7,14 @@ from .get_env import url, appkey, appSecret, authUrl, ENV_PATH
 from .get_client import client
 import asyncio
 
+# ── JUPYTER WIDGETS ──
+try:
+    import ipywidgets as widgets
+    from IPython.display import display, HTML, clear_output
+    IN_JUPYTER = True
+except ImportError:
+    IN_JUPYTER = False
+    
 from .dual_print import dual_print, IN_JUPYTER, _get_output
 
 access_token = None
@@ -34,25 +42,32 @@ async def prompt_for_auth_code(callback=None, output=None):
     """
 
     if IN_JUPYTER:
-        display(HTML(html_instructions))
-
         text = widgets.Text(
             description="Auth code:",
             layout=widgets.Layout(width="65%"),
             placeholder="paste the code from redirect URL",
         )
         button = widgets.Button(description="Submit", button_style="success")
-        # output = widgets.Output()
 
-        if output is None:
-            output = _get_output()
-        with output:
-            display(text, button)
+        # Bundle instructions and input widgets into a single container
+        container = widgets.VBox([
+            widgets.HTML(html_instructions),
+            widgets.HBox([text, button])
+        ])
+
+        if output is not None:
+            with output:
+                display(container)
+        else:
+            display(container)
+
+        captured = {"code": ""}
 
         def on_submit(b):
             code = text.value.strip()
             text.disabled = True
             button.disabled = True
+            captured["code"] = code
 
             dual_print("✅ Auth code captured:", code, output=output)
 
@@ -63,14 +78,19 @@ async def prompt_for_auth_code(callback=None, output=None):
 
         button.on_click(on_submit)
 
-        await event.wait()
+        # Poll loop keeps Tornado selector awake while waiting for user input
+        while not event.is_set():
+            await asyncio.sleep(0.05)
+
+        container.close()  # Clean up UI after submission
+        return captured["code"]
 
     else:
         dual_print(html_instructions, output=output)
         code = input("Paste the code here: ").strip()
         if callback:
             return callback(code)
-    return code
+        return code
 
 
 # ── SAVE ACCESS TOKEN ──
@@ -79,7 +99,6 @@ def save_access_token_to_env(token, env_path=ENV_PATH, output=None):
     Writes DARAZ_ACCESS_TOKEN=<token> to the .env file.
     Overwrites existing DARAZ_ACCESS_TOKEN if present.
     """
-    global dual_print
     lines = []
 
     if os.path.exists(env_path):

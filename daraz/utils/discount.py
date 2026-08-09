@@ -510,8 +510,9 @@ async def main():
     loop.set_exception_handler(async_exception_handler)
     global access_token
     refresh_env()
-    access_token = await get_access_token(output=output)
     if IN_JUPYTER:
+        display(output)
+        access_token = await get_access_token(output=output)
         # get_access_token(callback=after_token)
         # if output is None:
         #     output = _get_output()
@@ -520,7 +521,6 @@ async def main():
         #     clear_output(wait=True)
         #     display(output)
         # after_token(access_token)
-        display(output)
         # dual_print("Please select a date range.", output=output)
         start_date, end_date = await get_date_range_from_widget(output)
         try:
@@ -530,6 +530,7 @@ async def main():
         except Exception as e:
             dual_print(e, output=output)
     else:
+        access_token = await get_access_token(output=output)
         # fetch_and_process_data(access_token)
         start_date, end_date = get_date_range(output=output)
     try:

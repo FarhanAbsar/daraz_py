@@ -1,12 +1,17 @@
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+from .dual_print import dual_print, IN_JUPYTER
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+def refresh_env():
+    BASE_DIR = Path(__file__).resolve().parents[2]
+    # ── ENV LOAD ──
+    ENV_PATH = BASE_DIR / ".env"
+    load_dotenv(ENV_PATH, override=True)
 
-# ── ENV LOAD ──
-ENV_PATH = BASE_DIR / ".env"
-load_dotenv(ENV_PATH)
+    return ENV_PATH
+
+ENV_PATH = refresh_env()
 
 url = os.getenv("DARAZ_BASE_URL", "https://api.daraz.com.bd/rest")
 appkey = os.getenv("DARAZ_APP_KEY")

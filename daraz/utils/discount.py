@@ -131,8 +131,8 @@ def save_dates_to_env(start_date, end_date, env_path=ENV_PATH, output=None):
     # print(f"✅ Saved next date range: {start_date} → {end_date}")
 
 def get_next_date_range(current_start,current_end):
-    next_start = current_start + datetime.timedelta(days=6)
-    next_end = current_end + datetime.timedelta(days=6)
+    next_start = current_start + datetime.timedelta(days=7)
+    next_end = current_end + datetime.timedelta(days=7)
 
     return next_start.strftime("%Y-%m-%d"), next_end.strftime("%Y-%m-%d")
 
